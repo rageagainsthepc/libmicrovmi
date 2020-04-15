@@ -19,40 +19,29 @@ pub struct Kvm {
     vec_events: Vec<Option<KVMiEvent>>,
 }
 
-impl InterceptType {
-    fn to_kvmi(self) -> KVMiInterceptType {
-        match self {
-            InterceptType::Cr(_micro_cr_type) => KVMiInterceptType::Cr,
-        }
-    }
-}
-
 impl Kvm {
     pub fn new(domain_name: &str) -> Self {
         let socket_path = "/tmp/introspector";
         debug!("init on {} (socket: {})", domain_name, socket_path);
-        let mut kvm = Kvm {
+        Kvm {
             kvmi: KVMi::new(socket_path),
             expect_pause_ev: 0,
             vec_events: Vec::new(),
-        };
+        }
+    }
 
+    pub fn init(&self) -> Result<(), Box<dyn Error>> {
         // set vec_events size
-        let new_len: usize = kvm.get_vcpu_count().unwrap().try_into().unwrap();
-        kvm.vec_events.resize_with(new_len, || None);
+        let vcpu_count = kvm.get_vcpu_count()?;
+        kvm.vec_events
+            .resize_with(vcpu_count.try_into().unwrap(), || None);
 
         // enable CR event intercept by default
         // (interception will take place when CR register will be specified)
-        for cr_type in vec![CrType::Cr0, CrType::Cr3, CrType::Cr4].iter() {
-            let inter = InterceptType::Cr(*cr_type);
-            for vcpu in 0..kvm.get_vcpu_count().unwrap() {
-                kvm.kvmi
-                    .control_events(vcpu, inter.to_kvmi(), true)
-                    .unwrap();
-            }
+        for vcpu in 0..vcpu_count {
+            kvm.kvmi.control_events(vcpu, KVMiInterceptType::Cr, true)?;
         }
-
-        kvm
+        Ok(())
     }
 }
 
@@ -211,13 +200,10 @@ impl Drop for Kvm {
     fn drop(&mut self) {
         debug!("KVM driver close");
         // disable all control register interception
-        for cr_type in vec![CrType::Cr0, CrType::Cr3, CrType::Cr4].iter() {
-            let inter = InterceptType::Cr(*cr_type);
-            for vcpu in 0..self.get_vcpu_count().unwrap() {
-                self.kvmi
-                    .control_events(vcpu, inter.to_kvmi(), false)
-                    .unwrap();
-            }
+        for vcpu in 0..self.get_vcpu_count().unwrap() {
+            self.kvmi
+                .control_events(vcpu, KVMiInterceptType::Cr, false)
+                .unwrap();
         }
     }
 }
