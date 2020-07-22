@@ -15,7 +15,7 @@ pub struct Xen {
 }
 
 impl Xen {
-    pub fn new(domain_name: &str) -> Self {
+    pub fn new(domain_name: &str, xc: XenControl) -> Self {
         debug!("init on {}", domain_name);
         // find domain name in xenstore
         let xs = Xs::new(XsOpenFlags::ReadOnly).unwrap();
@@ -33,7 +33,6 @@ impl Xen {
         if !found {
             panic!("Cannot find domain {}", domain_name);
         }
-        let xc = XenControl::new(None, None, 0).unwrap();
         let xen_fgn = xenforeignmemory::XenForeignMem::new().unwrap();
         let xen = Xen {
             xc,
